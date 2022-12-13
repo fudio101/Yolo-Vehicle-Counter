@@ -1,4 +1,5 @@
 # import the necessary packages
+import datetime
 import time
 
 import numpy as np
@@ -55,18 +56,6 @@ def displayVehicleCount(frame_, total_vehicle_list_, violation_vehicle_list_):
             2,  # Thickness
             cv2.FONT_HERSHEY_COMPLEX_SMALL,
         )
-
-
-# PURPOSE: Displaying the FPS of the detected video
-# PARAMETERS: Start time of the frame, number of frames within the same second
-# RETURN: New start time, new number of frames
-def displayFPS(start_time, num_frames):
-    current_time = int(time.time())
-    if current_time > start_time:
-        print("FPS:", num_frames)
-        num_frames = 0
-        start_time = current_time
-    return start_time, num_frames
 
 
 # PURPOSE: Draw all the detection boxes with a green dot at the center
@@ -212,25 +201,30 @@ videoStream = cv2.VideoCapture(inputVideoPath)
 video_width = int(videoStream.get(cv2.CAP_PROP_FRAME_WIDTH))
 video_height = int(videoStream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+# get total frames
+total_frames = int(videoStream.get(cv2.CAP_PROP_FRAME_COUNT))
+
 # Initialization
 previous_frame_detections = [{(0, 0): 0} for i in range(FRAMES_BEFORE_CURRENT)]
 total_vehicle_list, violation_vehicle_list = [0 for _ in tracking_lines], [0 for _ in tracking_lines]
 counted_list = []
-total_frames, num_frames, vehicle_id_count = 0, 0, 0
+frames_counter, vehicle_id_count = 0, 0
 writer = initializeVideoWriter(video_width, video_height, videoStream)
 start_time = int(time.time())
 # loop over frames from the video file stream
 while True:
     os.system('cls')  # Equivalent of CTRL+L on the terminal
     print("================NEW FRAME================")
-    num_frames += 1
-    total_frames += 1
-    print("FRAME:\t", total_frames)
+    frames_counter += 1
+    print("FRAME:\t", frames_counter, "/", total_frames)
     # Initialization for each iteration
     boxes, confidences, classIDs = [], [], []
 
-    # Calculating fps each second
-    start_time, num_frames = displayFPS(start_time, num_frames)
+    current_time = int(time.time())
+    time_diff = current_time - start_time
+    print("Current time:\t", str(datetime.timedelta(seconds=time_diff)))
+    print("Estimated time:\t", str(datetime.timedelta(seconds=(time_diff / frames_counter * total_frames))))
+
     # read the next frame from the file
     (grabbed, frame) = videoStream.read()
 
@@ -283,7 +277,9 @@ while True:
                 classIDs.append(classID)
 
     for index, line in enumerate(tracking_lines):
-        cv2.line(frame, (line[0], line[2]), (line[1], line[2]), (0, 0, 255), 4)
+        cv2.line(frame, (line[0], line[2]), (line[1], line[2]), (0, 0, 255), 2)
+        cv2.line(frame, (line[0], line[2] - 10), (line[0], line[2] + 10), (0, 0, 255), 2)
+        cv2.line(frame, (line[1], line[2] - 10), (line[1], line[2] + 10), (0, 0, 255), 2)
 
     # apply non-maxima suppression to suppress weak, overlapping
     # bounding boxes
