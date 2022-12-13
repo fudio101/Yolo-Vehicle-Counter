@@ -15,11 +15,15 @@ inputWidth, inputHeight = 416, 416
 
 # Parse command line arguments and extract the values required
 LABELS, weightsPath, configPath, inputVideoPath, outputVideoPath, preDefinedConfidence, preDefinedThreshold, USE_GPU = parseCommandLineArguments()
+tracking_lines = [
+    [548, 768, 540, 0],
+    [773, 993, 540, 1],
+    [1000, 1220, 540, 1],
+]
 
 # Initialize a list of colors to represent each possible class label
 np.random.seed(42)
-COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),
-                           dtype="uint8")
+COLORS = np.random.randint(0, 255, size=(len(LABELS), 3), dtype="uint8")
 
 
 # PURPOSE: Displays the vehicle count on the top-left corner of the frame
@@ -36,22 +40,6 @@ def displayVehicleCount(frame, vehicle_count):
         2,  # Thickness
         cv2.FONT_HERSHEY_COMPLEX_SMALL,
     )
-
-
-# PURPOSE: Determining if the box-mid point cross the line or are within the range of 5 units
-# from the line
-# PARAMETERS: X Mid-Point of the box, Y mid-point of the box, Coordinates of the line
-# RETURN:
-# - True if the midpoint of the box overlaps with the line within a threshold of 5 units
-# - False if the midpoint of the box lies outside the line and threshold
-def boxAndLineOverlap(x_mid_point, y_mid_point, line_coordinates):
-    x1_line, y1_line, x2_line, y2_line = line_coordinates  # Unpacking
-
-    if (x_mid_point >= x1_line and x_mid_point <= x2_line + 5) and \
-            (y_mid_point >= y1_line and y_mid_point <= y2_line + 5):
-        return True
-    return False
-
 
 # PURPOSE: Displaying the FPS of the detected video
 # PARAMETERS: Start time of the frame, number of frames within the same second
@@ -102,9 +90,9 @@ def initializeVideoWriter(video_width, video_height, videoStream):
 
 # PURPOSE: Identifying if the current box was present in the previous frames
 # PARAMETERS: All the vehicular detections of the previous frames,
-#			the coordinates of the box of previous detections
+# the coordinates of the box of previous detections
 # RETURN: True if the box was current box was present in the previous frames;
-#		  False if the box was not present in the previous frames
+# False if the box was not present in the previous frames
 def boxInPreviousFrames(previous_frame_detections, current_box, current_detections):
     centerX, centerY, width, height = current_box
     dist = np.inf  # Initializing the minimum distance
@@ -150,7 +138,6 @@ def count_vehicles(idxs, boxes, classIDs, vehicle_count, vehicle_id_count, previ
                 if not boxInPreviousFrames(previous_frame_detections, (centerX, centerY, w, h), current_detections):
                     vehicle_id_count += 1
                     counted_list.append(0)
-                # vehicle_crossed_line_flag += True
                 # else: #ID assigning
                 # Add the current detection mid-point of box to the list of detected items
                 # Get the ID corresponding to the current detection
@@ -163,9 +150,16 @@ def count_vehicles(idxs, boxes, classIDs, vehicle_count, vehicle_id_count, previ
                     vehicle_id_count += 1
                     counted_list.append(0)
 
-                if centerY > y1_line and counted_list[ID] == 0 and centerX < x2_line:
-                    vehicle_count += 1
-                    counted_list[ID] = 1
+                for line_ in tracking_lines:
+                    if line_[0] < centerX < line_[1] and counted_list[ID] == 0:
+                        if line_[3]:
+                            if centerY < line_[2]:
+                                vehicle_count += 1
+                                counted_list[ID] = 1
+                        else:
+                            if centerY > line_[2]:
+                                vehicle_count += 1
+                                counted_list[ID] = 1
 
                 # Display the ID at the center of the box
                 color = [0, 0, 255] if counted_list[ID] == 0 else [0, 255, 0]
@@ -193,11 +187,6 @@ videoStream = cv2.VideoCapture(inputVideoPath)
 video_width = int(videoStream.get(cv2.CAP_PROP_FRAME_WIDTH))
 video_height = int(videoStream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-# Specifying coordinates for a default line
-x1_line = video_width * 2 // 7
-y1_line = video_height // 2
-x2_line = video_width * 2 // 5
-y2_line = video_height // 2
 
 # Initialization
 previous_frame_detections = [{(0, 0): 0} for i in range(FRAMES_BEFORE_CURRENT)]
@@ -214,7 +203,6 @@ while True:
     print("FRAME:\t", total_frames)
     # Initialization for each iteration
     boxes, confidences, classIDs = [], [], []
-    vehicle_crossed_line_flag = False
 
     # Calculating fps each second
     start_time, num_frames = displayFPS(start_time, num_frames)
@@ -270,12 +258,9 @@ while True:
                 confidences.append(float(confidence))
                 classIDs.append(classID)
 
-    # # Changing line color to green if a vehicle in the frame has crossed the line
-    if vehicle_crossed_line_flag:
-        cv2.line(frame, (x1_line, y1_line), (x2_line, y2_line), (0, 0xFF, 0), 2)
-    # # Changing line color to red if a vehicle in the frame has not crossed the line
-    else:
-        cv2.line(frame, (x1_line, y1_line), (x2_line, y2_line), (0, 0, 0xFF), 2)
+    for index, line in enumerate(tracking_lines):
+        color = (int(256 / (index + 5))+51, int(256 / (index + 1)), int(256 / (index + 3))+85)
+        cv2.line(frame, (line[0], line[2]), (line[1], line[2]), color, 4)
 
     # apply non-maxima suppression to suppress weak, overlapping
     # bounding boxes
@@ -294,9 +279,9 @@ while True:
     # write the output frame to disk
     writer.write(frame)
 
-    # if video_width > 1080:
-    #     scale = video_width / 1080
-    #     frame = cv2.resize(frame, (1080, int(video_height // scale)), interpolation=cv2.INTER_AREA)
+    if video_width > 1366:
+        scale = video_width / 1366
+        frame = cv2.resize(frame, (1366, int(video_height // scale)), interpolation=cv2.INTER_AREA)
 
     cv2.imshow('Frame', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
