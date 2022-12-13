@@ -4,3 +4,6 @@
 *.avi
 *.weights
 __pycache__/**
+input/
+output/
+.idea/
