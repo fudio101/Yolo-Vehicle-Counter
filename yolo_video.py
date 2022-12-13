@@ -15,13 +15,9 @@ FRAMES_BEFORE_CURRENT = 10
 inputWidth, inputHeight = 416, 416
 
 # Parse command line arguments and extract the values required
-LABELS, weightsPath, configPath, inputVideoPath, outputVideoPath, preDefinedConfidence, preDefinedThreshold, USE_GPU = parseCommandLineArguments()
-tracking_lines = [
-    [548, 768, 540, 0, ["car"]],
-    [773, 993, 540, 1, ["car"]],
-    [1000, 1220, 540, 1, ["car"]],
-]
-numbers_of_line = len(tracking_lines)
+LABELS, weightsPath, configPath, inputVideoPath, trackingLines, outputVideoPath, preDefinedConfidence, preDefinedThreshold, USE_GPU = parseCommandLineArguments()
+
+numbers_of_line = len(trackingLines)
 
 # Initialize a list of colors to represent each possible class label
 np.random.seed(42)
@@ -60,21 +56,21 @@ def displayVehicleCount(frame_, total_vehicle_list_, violation_vehicle_list_):
 
 # PURPOSE: Draw all the detection boxes with a green dot at the center
 # RETURN: N/A
-def drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame):
+def drawDetectionBoxes(idxs_, boxes_, classIDs_, confidences_, frame_):
     # ensure at least one detection exists
-    if len(idxs) > 0:
+    if len(idxs_) > 0:
         # loop over the indices we are keeping
-        for i in idxs.flatten():
+        for i in idxs_.flatten():
             # extract the bounding box coordinates
-            (x, y) = (boxes[i][0], boxes[i][1])
-            (w, h) = (boxes[i][2], boxes[i][3])
+            (x, y) = (boxes_[i][0], boxes_[i][1])
+            (w, h) = (boxes_[i][2], boxes_[i][3])
 
             # draw a bounding box rectangle and label on the frame
-            color = [int(c) for c in COLORS[classIDs[i]]]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 1)
-            text = "{}: {:.4f}".format(LABELS[classIDs[i]],
-                                       confidences[i])
-            cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            color = [int(c) for c in COLORS[classIDs_[i]]]
+            cv2.rectangle(frame_, (x, y), (x + w, y + h), color, 1)
+            text = "{}: {:.4f}".format(LABELS[classIDs_[i]],
+                                       confidences_[i])
+            cv2.putText(frame_, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
 
 # PURPOSE: Initializing the video writer with the output video path and the same number
@@ -95,31 +91,35 @@ def initializeVideoWriter(video_width, video_height, videoStream):
 # the coordinates of the box of previous detections
 # RETURN: True if the box was current box was present in the previous frames;
 # False if the box was not present in the previous frames
-def boxInPreviousFrames(previous_frame_detections, current_box, current_detections):
-    centerX, centerY, width, height = current_box
+def boxInPreviousFrames(previous_frame_detections_, current_box, current_detections_):
+    center_x, center_y, width_, height_ = current_box
     dist = np.inf  # Initializing the minimum distance
+
+    frame_num = 0
+    coord = (0, 0)
+
     # Iterating through all the k-dimensional trees
     for i in range(FRAMES_BEFORE_CURRENT):
-        coordinate_list = list(previous_frame_detections[i].keys())
+        coordinate_list = list(previous_frame_detections_[i].keys())
         if len(coordinate_list) == 0:  # When there are no detections in the previous frame
             continue
         # Finding the distance to the closest point and the index
-        temp_dist, index = spatial.KDTree(coordinate_list).query([(centerX, centerY)])
-        if (temp_dist < dist):
+        temp_dist, index_ = spatial.KDTree(coordinate_list).query([(center_x, center_y)])
+        if temp_dist < dist:
             dist = temp_dist
             frame_num = i
-            coord = coordinate_list[index[0]]
+            coord = coordinate_list[index_[0]]
 
-    if (dist > (max(width, height) / 2)):
+    if dist > (max(width_, height_) / 2):
         return False
 
     # Keeping the vehicle ID constant
-    current_detections[(centerX, centerY)] = previous_frame_detections[frame_num][coord]
+    current_detections_[(center_x, center_y)] = previous_frame_detections_[frame_num][coord]
     return True
 
 
-def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, violation_vehicle_list_, vehicle_id_count_,
-                   previous_frame_detections_, frame_):
+def count_vehicles(idxs_, boxes_, classIDs_, frame_):
+    global vehicle_id_count
     current_detections_ = {}
     # ensure at least one detection exists
     if len(idxs_) > 0:
@@ -136,9 +136,9 @@ def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, violation_vehi
             # it crosses the line AND
             # the ID of the detection is not present in the vehicles
             if LABELS[classIDs_[i]] in list_of_vehicles:
-                current_detections_[(centerX_, centerY_)] = vehicle_id_count_
-                if not boxInPreviousFrames(previous_frame_detections_, (centerX_, centerY_, w, h), current_detections_):
-                    vehicle_id_count_ += 1
+                current_detections_[(centerX_, centerY_)] = vehicle_id_count
+                if not boxInPreviousFrames(previous_frame_detections, (centerX_, centerY_, w, h), current_detections_):
+                    vehicle_id_count += 1
                     counted_list.append(0)
                 # else: #ID assigning
                 # Add the current detection mid-point of box to the list of detected items
@@ -148,28 +148,28 @@ def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, violation_vehi
                 # If there are two detections having the same ID due to being too close,
                 # then assign a new ID to current detection.
                 if list(current_detections_.values()).count(ID) > 1:
-                    current_detections_[(centerX_, centerY_)] = vehicle_id_count_
-                    vehicle_id_count_ += 1
+                    current_detections_[(centerX_, centerY_)] = vehicle_id_count
+                    vehicle_id_count += 1
                     counted_list.append(0)
 
-                for index_, line_ in enumerate(tracking_lines):
-                    if line_[0] < centerX_ < line_[1] and counted_list[ID] == 0:
-                        if line_[3]:
-                            if centerY_ < line_[2]:
-                                total_vehicle_list_[index_] += 1
-                                if LABELS[classIDs_[i]] in line_[4]:
+                for index_, line_ in enumerate(trackingLines):
+                    if line_["x1"] < centerX_ < line_["x2"] and counted_list[ID] == 0:
+                        if line_["state"]:
+                            if centerY_ < line_["y"]:
+                                total_vehicle_list[index_] += 1
+                                if LABELS[classIDs_[i]] in line_["allow"]:
                                     counted_list[ID] = 1
                                 else:
                                     counted_list[ID] = -1
-                                    violation_vehicle_list_[index_] += 1
+                                    violation_vehicle_list[index_] += 1
                         else:
-                            if centerY_ > line_[2]:
-                                total_vehicle_list_[index_] += 1
-                                if LABELS[classIDs_[i]] in line_[4]:
+                            if centerY_ > line_["y"]:
+                                total_vehicle_list[index_] += 1
+                                if LABELS[classIDs_[i]] in line_["allow"]:
                                     counted_list[ID] = 1
                                 else:
                                     counted_list[ID] = -1
-                                    violation_vehicle_list_[index_] += 1
+                                    violation_vehicle_list[index_] += 1
 
                 # Display the ID at the center of the box
                 color = [int(c) for c in COLORS[classIDs[i]]] if counted_list[ID] == 0 else (
@@ -179,7 +179,7 @@ def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, violation_vehi
                 # Draw a green dot in the middle of the box
                 cv2.circle(frame, (centerX_, centerY_), 2, color, thickness=2)
 
-    return total_vehicle_list_, violation_vehicle_list_, vehicle_id_count_, current_detections_
+    return current_detections_
 
 
 # load our YOLO object detector trained on COCO dataset (80 classes)
@@ -206,11 +206,12 @@ total_frames = int(videoStream.get(cv2.CAP_PROP_FRAME_COUNT))
 
 # Initialization
 previous_frame_detections = [{(0, 0): 0} for i in range(FRAMES_BEFORE_CURRENT)]
-total_vehicle_list, violation_vehicle_list = [0 for _ in tracking_lines], [0 for _ in tracking_lines]
+total_vehicle_list, violation_vehicle_list = [0 for _ in trackingLines], [0 for _ in trackingLines]
 counted_list = []
 frames_counter, vehicle_id_count = 0, 0
 writer = initializeVideoWriter(video_width, video_height, videoStream)
-start_time = int(time.time())
+start_time = current_time = int(time.time())
+time_diff = 0
 # loop over frames from the video file stream
 while True:
     os.system('cls')  # Equivalent of CTRL+L on the terminal
@@ -223,7 +224,7 @@ while True:
     current_time = int(time.time())
     time_diff = current_time - start_time
     print("Current time:\t", str(datetime.timedelta(seconds=time_diff)))
-    print("Estimated time:\t", str(datetime.timedelta(seconds=(time_diff / frames_counter * total_frames))))
+    print("Estimated time:\t", str(datetime.timedelta(seconds=int(time_diff / frames_counter * total_frames))))
 
     # read the next frame from the file
     (grabbed, frame) = videoStream.read()
@@ -276,10 +277,10 @@ while True:
                 confidences.append(float(confidence))
                 classIDs.append(classID)
 
-    for index, line in enumerate(tracking_lines):
-        cv2.line(frame, (line[0], line[2]), (line[1], line[2]), (0, 0, 255), 2)
-        cv2.line(frame, (line[0], line[2] - 10), (line[0], line[2] + 10), (0, 0, 255), 2)
-        cv2.line(frame, (line[1], line[2] - 10), (line[1], line[2] + 10), (0, 0, 255), 2)
+    for index, line in enumerate(trackingLines):
+        cv2.line(frame, (line["x1"], line["y"]), (line["x2"], line["y"]), (0, 0, 255), 2)
+        cv2.line(frame, (line["x1"], line["y"] - 10), (line["x1"], line["y"] + 10), (0, 0, 255), 2)
+        cv2.line(frame, (line["x2"], line["y"] - 10), (line["x2"], line["y"] + 10), (0, 0, 255), 2)
 
     # apply non-maxima suppression to suppress weak, overlapping
     # bounding boxes
@@ -288,13 +289,7 @@ while True:
     # Draw detection box
     drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame)
 
-    total_vehicle_list, violation_vehicle_list, vehicle_id_count, current_detections = count_vehicles(idxs, boxes,
-                                                                                                      classIDs,
-                                                                                                      total_vehicle_list,
-                                                                                                      violation_vehicle_list,
-                                                                                                      vehicle_id_count,
-                                                                                                      previous_frame_detections,
-                                                                                                      frame)
+    current_detections = count_vehicles(idxs, boxes, classIDs, frame)
 
     # Display Vehicle Count if a vehicle has passed the line
     displayVehicleCount(frame, total_vehicle_list, violation_vehicle_list)
@@ -306,7 +301,7 @@ while True:
         scale = video_width / 1366
         frame = cv2.resize(frame, (1366, int(video_height // scale)), interpolation=cv2.INTER_AREA)
 
-    cv2.imshow('Frame', frame)
+    cv2.imshow('Detect monitor (press q to quit)', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
@@ -316,6 +311,9 @@ while True:
     previous_frame_detections.append(current_detections)
 
 # release the file pointers
+os.system('cls')
 print("[INFO] cleaning up...")
+print("Total time:\t", str(datetime.timedelta(seconds=time_diff)))
+print("Total frame:\t", frames_counter)
 writer.release()
 videoStream.release()
