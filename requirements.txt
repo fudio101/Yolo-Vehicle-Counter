@@ -1,4 +1,5 @@
 opencv-python==3.4.2.17
 # opencv-python==4.3.0.38
 imutils
-scipy
+scipy~=1.5.4
+numpy~=1.19.5
