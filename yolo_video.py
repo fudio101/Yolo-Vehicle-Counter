@@ -16,9 +16,9 @@ inputWidth, inputHeight = 416, 416
 # Parse command line arguments and extract the values required
 LABELS, weightsPath, configPath, inputVideoPath, outputVideoPath, preDefinedConfidence, preDefinedThreshold, USE_GPU = parseCommandLineArguments()
 tracking_lines = [
-    [548, 768, 540, 0],
-    [773, 993, 540, 1],
-    [1000, 1220, 540, 1],
+    [548, 768, 540, 0, ["car"]],
+    [773, 993, 540, 1, ["car"]],
+    [1000, 1220, 540, 1, ["car"]],
 ]
 numbers_of_line = len(tracking_lines)
 
@@ -30,11 +30,11 @@ COLORS = np.random.randint(0, 255, size=(len(LABELS), 3), dtype="uint8")
 # PURPOSE: Displays the vehicle count on the top-left corner of the frame
 # PARAMETERS: Frame on which the count is displayed, the count number of vehicles
 # RETURN: N/A
-def displayVehicleCount(frame_, vehicle_count, total_vehicle_list_):
+def displayVehicleCount(frame_, total_vehicle_list_, violation_vehicle_list_):
     cv2.rectangle(frame, (0, 0), (video_width, 25), (255, 255, 255), -1)
     cv2.putText(
         frame_,  # Image
-        'Detected Vehicles: ' + str(vehicle_count),  # Label
+        'Total: ' + str(np.sum(violation_vehicle_list_)) + '/' + str(np.sum(total_vehicle_list)),  # Label
         (20, 20),  # Position
         cv2.FONT_HERSHEY_SIMPLEX,  # Font
         0.8,  # Size
@@ -47,7 +47,7 @@ def displayVehicleCount(frame_, vehicle_count, total_vehicle_list_):
     for index_, total in enumerate(total_vehicle_list_):
         cv2.putText(
             frame_,  # Image
-            'Lane ' + str(index_ + 1) + ': ' + str(total),  # Label
+            'Lane ' + str(index_ + 1) + ': ' + str(violation_vehicle_list_[index_]) + '/' + str(total),  # Label
             (t * (index_ + 1), 20),  # Position
             cv2.FONT_HERSHEY_SIMPLEX,  # Font
             0.8,  # Size
@@ -129,7 +129,7 @@ def boxInPreviousFrames(previous_frame_detections, current_box, current_detectio
     return True
 
 
-def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, vehicle_id_count_,
+def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, violation_vehicle_list_, vehicle_id_count_,
                    previous_frame_detections_, frame_):
     current_detections_ = {}
     # ensure at least one detection exists
@@ -168,19 +168,29 @@ def count_vehicles(idxs_, boxes_, classIDs_, total_vehicle_list_, vehicle_id_cou
                         if line_[3]:
                             if centerY_ < line_[2]:
                                 total_vehicle_list_[index_] += 1
-                                counted_list[ID] = 1
+                                if LABELS[classIDs_[i]] in line_[4]:
+                                    counted_list[ID] = 1
+                                else:
+                                    counted_list[ID] = -1
+                                    violation_vehicle_list_[index_] += 1
                         else:
                             if centerY_ > line_[2]:
                                 total_vehicle_list_[index_] += 1
-                                counted_list[ID] = 1
+                                if LABELS[classIDs_[i]] in line_[4]:
+                                    counted_list[ID] = 1
+                                else:
+                                    counted_list[ID] = -1
+                                    violation_vehicle_list_[index_] += 1
 
                 # Display the ID at the center of the box
-                color = [int(c) for c in COLORS[classIDs[i]]] if counted_list[ID] == 0 else [0, 255, 0]
+                color = [int(c) for c in COLORS[classIDs[i]]] if counted_list[ID] == 0 else (
+                    (0, 255, 0) if counted_list[ID] == 1 else (0, 0, 255)
+                )
                 cv2.putText(frame_, str(ID), (centerX_, centerY_), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 # Draw a green dot in the middle of the box
                 cv2.circle(frame, (centerX_, centerY_), 2, color, thickness=2)
 
-    return total_vehicle_list_, vehicle_id_count_, current_detections_
+    return total_vehicle_list_, violation_vehicle_list_, vehicle_id_count_, current_detections_
 
 
 # load our YOLO object detector trained on COCO dataset (80 classes)
@@ -282,14 +292,16 @@ while True:
     # Draw detection box
     drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame)
 
-    total_vehicle_list, vehicle_id_count, current_detections = count_vehicles(idxs, boxes, classIDs,
-                                                                              total_vehicle_list,
-                                                                              vehicle_id_count,
-                                                                              previous_frame_detections,
-                                                                              frame)
+    total_vehicle_list, violation_vehicle_list, vehicle_id_count, current_detections = count_vehicles(idxs, boxes,
+                                                                                                      classIDs,
+                                                                                                      total_vehicle_list,
+                                                                                                      violation_vehicle_list,
+                                                                                                      vehicle_id_count,
+                                                                                                      previous_frame_detections,
+                                                                                                      frame)
 
     # Display Vehicle Count if a vehicle has passed the line
-    displayVehicleCount(frame, np.sum(total_vehicle_list), total_vehicle_list)
+    displayVehicleCount(frame, total_vehicle_list, violation_vehicle_list)
 
     # write the output frame to disk
     writer.write(frame)
