@@ -124,11 +124,11 @@ def count_vehicles(idxs_, boxes_, classIDs_, vehicle_count_, vehicle_id_count_, 
         # loop over the indices we are keeping
         for i in idxs_.flatten():
             # extract the bounding box coordinates
-            (x, y) = (boxes_[i][0], boxes_[i][1])
+            (x_, y_) = (boxes_[i][0], boxes_[i][1])
             (w, h) = (boxes_[i][2], boxes_[i][3])
 
-            centerX_ = x + (w // 2)
-            centerY_ = y + (h // 2)
+            centerX_ = x_ + (w // 2)
+            centerY_ = y_ + (h // 2)
 
             # When the detection is in the list of vehicles, AND
             # it crosses the line AND
