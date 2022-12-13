@@ -41,6 +41,7 @@ def displayVehicleCount(frame, vehicle_count):
         cv2.FONT_HERSHEY_COMPLEX_SMALL,
     )
 
+
 # PURPOSE: Displaying the FPS of the detected video
 # PARAMETERS: Start time of the frame, number of frames within the same second
 # RETURN: New start time, new number of frames
@@ -116,56 +117,55 @@ def boxInPreviousFrames(previous_frame_detections, current_box, current_detectio
     return True
 
 
-def count_vehicles(idxs, boxes, classIDs, vehicle_count, vehicle_id_count, previous_frame_detections,
-                   frame):
-    current_detections = {}
+def count_vehicles(idxs_, boxes_, classIDs_, vehicle_count_, vehicle_id_count_, previous_frame_detections_, frame_):
+    current_detections_ = {}
     # ensure at least one detection exists
-    if len(idxs) > 0:
+    if len(idxs_) > 0:
         # loop over the indices we are keeping
-        for i in idxs.flatten():
+        for i in idxs_.flatten():
             # extract the bounding box coordinates
-            (x, y) = (boxes[i][0], boxes[i][1])
-            (w, h) = (boxes[i][2], boxes[i][3])
+            (x, y) = (boxes_[i][0], boxes_[i][1])
+            (w, h) = (boxes_[i][2], boxes_[i][3])
 
-            centerX = x + (w // 2)
-            centerY = y + (h // 2)
+            centerX_ = x + (w // 2)
+            centerY_ = y + (h // 2)
 
             # When the detection is in the list of vehicles, AND
             # it crosses the line AND
             # the ID of the detection is not present in the vehicles
-            if LABELS[classIDs[i]] in list_of_vehicles:
-                current_detections[(centerX, centerY)] = vehicle_id_count
-                if not boxInPreviousFrames(previous_frame_detections, (centerX, centerY, w, h), current_detections):
-                    vehicle_id_count += 1
+            if LABELS[classIDs_[i]] in list_of_vehicles:
+                current_detections_[(centerX_, centerY_)] = vehicle_id_count_
+                if not boxInPreviousFrames(previous_frame_detections_, (centerX_, centerY_, w, h), current_detections_):
+                    vehicle_id_count_ += 1
                     counted_list.append(0)
                 # else: #ID assigning
                 # Add the current detection mid-point of box to the list of detected items
                 # Get the ID corresponding to the current detection
 
-                ID = current_detections.get((centerX, centerY))
+                ID = current_detections_.get((centerX_, centerY_))
                 # If there are two detections having the same ID due to being too close,
                 # then assign a new ID to current detection.
-                if list(current_detections.values()).count(ID) > 1:
-                    current_detections[(centerX, centerY)] = vehicle_id_count
-                    vehicle_id_count += 1
+                if list(current_detections_.values()).count(ID) > 1:
+                    current_detections_[(centerX_, centerY_)] = vehicle_id_count_
+                    vehicle_id_count_ += 1
                     counted_list.append(0)
 
                 for line_ in tracking_lines:
-                    if line_[0] < centerX < line_[1] and counted_list[ID] == 0:
+                    if line_[0] < centerX_ < line_[1] and counted_list[ID] == 0:
                         if line_[3]:
-                            if centerY < line_[2]:
-                                vehicle_count += 1
+                            if centerY_ < line_[2]:
+                                vehicle_count_ += 1
                                 counted_list[ID] = 1
                         else:
-                            if centerY > line_[2]:
-                                vehicle_count += 1
+                            if centerY_ > line_[2]:
+                                vehicle_count_ += 1
                                 counted_list[ID] = 1
 
                 # Display the ID at the center of the box
                 color = [0, 0, 255] if counted_list[ID] == 0 else [0, 255, 0]
-                cv2.putText(frame, str(ID), (centerX, centerY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(frame_, str(ID), (centerX_, centerY_), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    return vehicle_count, vehicle_id_count, current_detections
+    return vehicle_count_, vehicle_id_count_, current_detections_
 
 
 # load our YOLO object detector trained on COCO dataset (80 classes)
@@ -186,7 +186,6 @@ ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 videoStream = cv2.VideoCapture(inputVideoPath)
 video_width = int(videoStream.get(cv2.CAP_PROP_FRAME_WIDTH))
 video_height = int(videoStream.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
 
 # Initialization
 previous_frame_detections = [{(0, 0): 0} for i in range(FRAMES_BEFORE_CURRENT)]
@@ -259,7 +258,7 @@ while True:
                 classIDs.append(classID)
 
     for index, line in enumerate(tracking_lines):
-        color = (int(256 / (index + 5))+51, int(256 / (index + 1)), int(256 / (index + 3))+85)
+        color = (int(256 / (index + 5)) + 51, int(256 / (index + 1)), int(256 / (index + 3)) + 85)
         cv2.line(frame, (line[0], line[2]), (line[1], line[2]), color, 4)
 
     # apply non-maxima suppression to suppress weak, overlapping
