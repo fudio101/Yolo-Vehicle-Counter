@@ -88,7 +88,7 @@ pip3 install scipy
   for computations
 
 ```
-python3 yolo_video.py --input <input video path> --output <output video path> --yolo yolo-coco [--confidence <float number between 0 and 1>] [--threshold <float number between 0 and 1>] [--use-gpu 1]
+python3 yolo_video.py --input <input video path> --config inputVideos/highway.cnf --output <output video path> --yolo yolo-coco [--confidence <float number between 0 and 1>] [--threshold <float number between 0 and 1>] [--use-gpu 1]
 ```
 
 Examples:
